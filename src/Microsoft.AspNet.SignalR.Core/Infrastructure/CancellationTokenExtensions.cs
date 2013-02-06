@@ -9,39 +9,79 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
     {
         public static IDisposable SafeRegister<T>(this CancellationToken cancellationToken, Action<T> callback, T state)
         {
-            var callbackInvoked = 0;
-
+            var callbackWrapper = new CancellationCallbackWrapper<T>(callback, state);
+            
             try
             {
-                CancellationTokenRegistration registration = cancellationToken.Register(callbackState =>
+                CancellationTokenRegistration registration = cancellationToken.Register(tokenState =>
                 {
-                    if (Interlocked.Exchange(ref callbackInvoked, 1) == 0)
-                    {
-                        callback((T)callbackState);
-                    }
+                    ((CancellationCallbackWrapper<T>)tokenState).TryInvoke();
                 },
-                state,
+                callbackWrapper,
                 useSynchronizationContext: false);
 
-                return new DisposableAction(() =>
+                var disposeCancellationState = new DiposeCancellationState<T>(callbackWrapper, registration);
+
+                return new DisposableAction(diposeState =>
                 {
-                    // This normally waits until the callback is finished invoked but we don't care
-                    if (Interlocked.Exchange(ref callbackInvoked, 1) == 0)
-                    {
-                        registration.Dispose();
-                    }
-                });
+                    ((DiposeCancellationState<T>)diposeState).TryDispose();
+                },
+                disposeCancellationState);
             }
             catch (ObjectDisposedException)
             {
-                if (Interlocked.Exchange(ref callbackInvoked, 1) == 0)
-                {
-                    callback(state);
-                }
+                callbackWrapper.TryInvoke();
             }
 
             // Noop
-            return new DisposableAction(() => { });
+            return DisposableAction.Empty;
+        }
+
+        private class DiposeCancellationState<T>
+        {
+            private readonly CancellationCallbackWrapper<T> _callbackWrapper;
+            private readonly CancellationTokenRegistration _registration;
+
+            public DiposeCancellationState(CancellationCallbackWrapper<T> callbackWrapper, CancellationTokenRegistration registration)
+            {
+                _callbackWrapper = callbackWrapper;
+                _registration = registration;
+            }
+
+            public void TryDispose()
+            {
+                if (_callbackWrapper.TrySetInvoked())
+                {
+                    // This normally waits until the callback is finished invoked but we don't care
+                    _registration.Dispose();
+                }
+            }
+        }
+        
+        private class CancellationCallbackWrapper<T>
+        {
+            private readonly Action<T> _callback;
+            private readonly T _state;
+            private int _callbackInvoked;
+
+            public CancellationCallbackWrapper(Action<T> callback, T state)
+            {
+                _callback = callback;
+                _state = state;
+            }
+
+            public bool TrySetInvoked()
+            {
+                return Interlocked.Exchange(ref _callbackInvoked, 1) == 0;
+            }
+
+            public void TryInvoke()
+            {
+                if (TrySetInvoked())
+                {
+                    _callback(_state);
+                }
+            }
         }
     }
 }
