@@ -15,7 +15,7 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
         private readonly object _state;
 
         public DisposableAction(Action action)
-            : this(state => action(), state: null)
+            : this(state => ((Action)state).Invoke(), state: action)
         {
 
         }
