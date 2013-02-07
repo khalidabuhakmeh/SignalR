@@ -119,12 +119,13 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
 
         private Task<bool> HandleServerCommands(MessageResult result)
         {
-            result.Messages.Enumerate(m => ServerSignal.Equals(m.Key),
-                                      m =>
-                                      {
-                                          var command = _serializer.Parse<ServerCommand>(m.Value);
-                                          OnCommand(command);
-                                      });
+            result.Messages.Enumerate<object>(m => ServerSignal.Equals(m.Key),
+                                              (state, m) =>
+                                              {
+                                                  var command = _serializer.Parse<ServerCommand>(m.Value);
+                                                  OnCommand(command);
+                                              },
+                                              state: null);
 
             return TaskAsyncHelper.True;
         }

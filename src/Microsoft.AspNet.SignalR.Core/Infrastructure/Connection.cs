@@ -190,30 +190,30 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
 
         private void ProcessResults(MessageResult result)
         {
-            result.Messages.Enumerate(message => message.IsAck || message.IsCommand,
-                                      message =>
-                                      {
-                                          if (message.IsAck)
-                                          {
-                                              _ackHandler.TriggerAck(message.CommandId);
-                                          }
-                                          else if (message.IsCommand)
-                                          {
-                                              var command = _serializer.Parse<Command>(message.Value);
-                                              ProcessCommand(command);
+            result.Messages.Enumerate<object>(message => message.IsAck || message.IsCommand,
+                                              (state, message) =>
+                                             {
+                                                 if (message.IsAck)
+                                                 {
+                                                     _ackHandler.TriggerAck(message.CommandId);
+                                                 }
+                                                 else if (message.IsCommand)
+                                                 {
+                                                     var command = _serializer.Parse<Command>(message.Value);
+                                                     ProcessCommand(command);
 
-                                              // Only send the ack if this command is waiting for it
-                                              if (message.WaitForAck)
-                                              {
-                                                  // If we're on the same box and there's a pending ack for this command then
-                                                  // just trip it
-                                                  if (!_ackHandler.TriggerAck(message.CommandId))
-                                                  {
-                                                      _bus.Ack(_connectionId, message.CommandId).Catch();
-                                                  }
-                                              }
-                                          }
-                                      });
+                                                     // Only send the ack if this command is waiting for it
+                                                     if (message.WaitForAck)
+                                                     {
+                                                         // If we're on the same box and there's a pending ack for this command then
+                                                         // just trip it
+                                                         if (!_ackHandler.TriggerAck(message.CommandId))
+                                                         {
+                                                             _bus.Ack(_connectionId, message.CommandId).Catch();
+                                                         }
+                                                     }
+                                                 }
+                                             }, null);
         }
 
         private void ProcessCommand(Command command)
@@ -256,9 +256,9 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
             PopulateResponseState(response, _groups, _serializer, _protectedData);
         }
 
-        internal static void PopulateResponseState(PersistentResponse response, 
-                                                   DiffSet<string> groupSet, 
-                                                   IJsonSerializer serializer, 
+        internal static void PopulateResponseState(PersistentResponse response,
+                                                   DiffSet<string> groupSet,
+                                                   IJsonSerializer serializer,
                                                    IProtectedData protectedData)
         {
             DiffPair<string> groupDiff = groupSet.GetDiff();
