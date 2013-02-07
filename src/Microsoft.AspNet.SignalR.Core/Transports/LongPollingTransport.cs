@@ -178,7 +178,7 @@ namespace Microsoft.AspNet.SignalR.Transports
 
         public Task Send(object value)
         {
-            return EnqueueOperation(() =>
+            return EnqueueOperation(state =>
             {
                 Context.Response.ContentType = IsJsonp ? JsonUtility.JavaScriptMimeType : JsonUtility.JsonMimeType;
 
@@ -188,7 +188,7 @@ namespace Microsoft.AspNet.SignalR.Transports
                     OutputWriter.Write("(");
                 }
 
-                _jsonSerializer.Serialize(value, OutputWriter);
+                _jsonSerializer.Serialize(state, OutputWriter);
 
                 if (IsJsonp)
                 {
@@ -202,7 +202,8 @@ namespace Microsoft.AspNet.SignalR.Transports
                                        {
                                            Trace.TraceEvent(TraceEventType.Error, 0, "Failed EndAsync() for {0} with: {1}", ConnectionId, ex.GetBaseException());
                                        });
-            });
+            }, 
+            value);
         }
 
         private Task ProcessSendRequest()

@@ -291,13 +291,18 @@ namespace Microsoft.AspNet.SignalR.Transports
 
         protected virtual internal Task EnqueueOperation(Func<Task> writeAsync)
         {
+            return EnqueueOperation(state => ((Func<Task>)state).Invoke(), writeAsync);
+        }
+
+        protected virtual internal Task EnqueueOperation(Func<object, Task> writeAsync, object state)
+        {
             if (!IsAlive)
             {
                 return TaskAsyncHelper.Empty;
             }
 
             // Only enqueue new writes if the connection is alive
-            return WriteQueue.Enqueue(writeAsync);
+            return WriteQueue.Enqueue(writeAsync, state);
         }
 
         protected virtual void InitializePersistentState()

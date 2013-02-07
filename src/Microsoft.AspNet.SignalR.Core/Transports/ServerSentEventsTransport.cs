@@ -36,16 +36,17 @@ namespace Microsoft.AspNet.SignalR.Transports
         {
             OnSendingResponse(response);
 
-            return EnqueueOperation(() =>
+            return EnqueueOperation(state =>
             {
                 OutputWriter.Write("data: ");
-                JsonSerializer.Serialize(response, OutputWriter);
+                JsonSerializer.Serialize(state, OutputWriter);
                 OutputWriter.WriteLine();
                 OutputWriter.WriteLine();
                 OutputWriter.Flush();
 
                 return Context.Response.Flush();
-            });
+            }, 
+            response);
         }
 
         protected internal override Task InitializeResponse(ITransportConnection connection)

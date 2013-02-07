@@ -82,15 +82,16 @@ namespace Microsoft.AspNet.SignalR.Transports
         {
             OnSendingResponse(response);
 
-            return EnqueueOperation(() =>
+            return EnqueueOperation(state =>
             {
                 HTMLOutputWriter.WriteRaw("<script>r(c, ");
-                JsonSerializer.Serialize(response, HTMLOutputWriter);
+                JsonSerializer.Serialize(state, HTMLOutputWriter);
                 HTMLOutputWriter.WriteRaw(");</script>\r\n");
                 HTMLOutputWriter.Flush();
 
                 return Context.Response.Flush();
-            });
+            }, 
+            response);
         }
 
         protected internal override Task InitializeResponse(ITransportConnection connection)
@@ -106,15 +107,16 @@ namespace Microsoft.AspNet.SignalR.Transports
             return base.InitializeResponse(connection)
                 .Then(initScript =>
                 {
-                    return EnqueueOperation(() =>
+                    return EnqueueOperation(state =>
                     {
                         Context.Response.ContentType = "text/html; charset=UTF-8";
 
-                        HTMLOutputWriter.WriteRaw(initScript);
+                        HTMLOutputWriter.WriteRaw((string)state);
                         HTMLOutputWriter.Flush();
 
                         return Context.Response.Flush();
-                    });
+                    }, 
+                    initScript);
                 },
                 _initPrefix + frameId.ToString(CultureInfo.InvariantCulture) + _initSuffix);
         }
