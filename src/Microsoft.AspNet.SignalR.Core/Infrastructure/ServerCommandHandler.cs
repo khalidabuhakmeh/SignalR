@@ -56,7 +56,7 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
             }
         }
 
-        event Action<string> ISubscriber.EventKeyAdded
+        event Action<ISubscriber, string> ISubscriber.EventKeyAdded
         {
             add
             {
@@ -66,7 +66,7 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
             }
         }
 
-        event Action<string> ISubscriber.EventKeyRemoved
+        event Action<ISubscriber, string> ISubscriber.EventKeyRemoved
         {
             add
             {
@@ -84,6 +84,12 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
             {
                 return _serverIdManager.ServerId;
             }
+        }
+        
+        public Subscription Subscription
+        {
+            get;
+            set;
         }
 
         public Task SendCommand(ServerCommand command)

@@ -68,9 +68,9 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
             }
         }
 
-        public event Action<string> EventKeyAdded;
+        public event Action<ISubscriber, string> EventKeyAdded;
 
-        public event Action<string> EventKeyRemoved;
+        public event Action<ISubscriber, string> EventKeyRemoved;
 
         public Func<string> GetCursor { get; set; }
 
@@ -97,6 +97,12 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
             {
                 return _traceSource.Value;
             }
+        }
+        
+        public Subscription Subscription
+        {
+            get;
+            set;
         }
 
         public Task Send(ConnectionMessage message)
@@ -192,28 +198,28 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
         {
             result.Messages.Enumerate<object>(message => message.IsAck || message.IsCommand,
                                               (state, message) =>
-                                             {
-                                                 if (message.IsAck)
-                                                 {
-                                                     _ackHandler.TriggerAck(message.CommandId);
-                                                 }
-                                                 else if (message.IsCommand)
-                                                 {
-                                                     var command = _serializer.Parse<Command>(message.Value);
-                                                     ProcessCommand(command);
+                                              {
+                                                  if (message.IsAck)
+                                                  {
+                                                      _ackHandler.TriggerAck(message.CommandId);
+                                                  }
+                                                  else if (message.IsCommand)
+                                                  {
+                                                      var command = _serializer.Parse<Command>(message.Value);
+                                                      ProcessCommand(command);
 
-                                                     // Only send the ack if this command is waiting for it
-                                                     if (message.WaitForAck)
-                                                     {
-                                                         // If we're on the same box and there's a pending ack for this command then
-                                                         // just trip it
-                                                         if (!_ackHandler.TriggerAck(message.CommandId))
-                                                         {
-                                                             _bus.Ack(_connectionId, message.CommandId).Catch();
-                                                         }
-                                                     }
-                                                 }
-                                             }, null);
+                                                      // Only send the ack if this command is waiting for it
+                                                      if (message.WaitForAck)
+                                                      {
+                                                          // If we're on the same box and there's a pending ack for this command then
+                                                          // just trip it
+                                                          if (!_ackHandler.TriggerAck(message.CommandId))
+                                                          {
+                                                              _bus.Ack(_connectionId, message.CommandId).Catch();
+                                                          }
+                                                      }
+                                                  }
+                                              }, null);
         }
 
         private void ProcessCommand(Command command)
@@ -227,7 +233,7 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
                         if (EventKeyAdded != null)
                         {
                             _groups.Add(name);
-                            EventKeyAdded(name);
+                            EventKeyAdded(this, name);
                         }
                     }
                     break;
@@ -238,7 +244,7 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
                         if (EventKeyRemoved != null)
                         {
                             _groups.Remove(name);
-                            EventKeyRemoved(name);
+                            EventKeyRemoved(this, name);
                         }
                     }
                     break;

@@ -32,7 +32,7 @@ namespace Microsoft.AspNet.SignalR.Messaging
 
         public int MaxMessages { get; private set; }
 
-        public Action DisposedCallback { get; set; }
+        public IDisposable Disposable { get; set; }
 
         protected Subscription(string identity, IEnumerable<string> eventKeys, Func<MessageResult, Task<bool>> callback, int maxMessages, IPerformanceCounterManager counters)
         {
@@ -302,9 +302,9 @@ namespace Microsoft.AspNet.SignalR.Messaging
                         }
 
                         // Raise the disposed callback
-                        if (DisposedCallback != null)
+                        if (Disposable != null)
                         {
-                            DisposedCallback();
+                            Disposable.Dispose();
                         }
 
                         break;
