@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.md in the project root for license information.
 
+using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.AspNet.SignalR.Hosting;
@@ -9,9 +10,18 @@ namespace Microsoft.AspNet.SignalR.Transports
 {
     public class ServerSentEventsTransport : ForeverTransport
     {
+        private readonly Func<Task> _keepAlive;
+        private readonly Func<object, Task> _send;
+        private readonly Func<Task> _writeInit;
+        private readonly Func<Task> _initializeResponse;
+
         public ServerSentEventsTransport(HostContext context, IDependencyResolver resolver)
             : base(context, resolver)
         {
+            _keepAlive = PerformKeepAlive;
+            _send = PerfomSend;
+            _writeInit = WriteInit;
+            _initializeResponse = InitializeResponse;
         }
 
         public override Task KeepAlive()
@@ -21,52 +31,59 @@ namespace Microsoft.AspNet.SignalR.Transports
                 return TaskAsyncHelper.Empty;
             }
 
-            return EnqueueOperation(() =>
-            {
-                OutputWriter.Write("data: {}");
-                OutputWriter.WriteLine();
-                OutputWriter.WriteLine();
-                OutputWriter.Flush();
-
-                return Context.Response.Flush();
-            });
+            return EnqueueOperation(_keepAlive);
         }
 
         public override Task Send(PersistentResponse response)
         {
             OnSendingResponse(response);
 
-            return EnqueueOperation(state =>
-            {
-                OutputWriter.Write("data: ");
-                JsonSerializer.Serialize(state, OutputWriter);
-                OutputWriter.WriteLine();
-                OutputWriter.WriteLine();
-                OutputWriter.Flush();
-
-                return Context.Response.Flush();
-            }, 
-            response);
+            return EnqueueOperation(_send, response);
         }
 
         protected internal override Task InitializeResponse(ITransportConnection connection)
         {
             return base.InitializeResponse(connection)
-                       .Then(() =>
-                       {
-                           return EnqueueOperation(() =>
-                           {
-                               Context.Response.ContentType = "text/event-stream";
+                       .Then(_initializeResponse);
+        }
 
-                               // "data: initialized\n\n"
-                               OutputWriter.Write("data: initialized");
-                               OutputWriter.WriteLine();
-                               OutputWriter.WriteLine();
-                               OutputWriter.Flush();
+        private Task InitializeResponse()
+        {
+            return EnqueueOperation(_writeInit);
+        }
 
-                               return Context.Response.Flush();
-                           });
-                       });
+        private Task PerformKeepAlive()
+        {
+            OutputWriter.Write("data: {}");
+            OutputWriter.WriteLine();
+            OutputWriter.WriteLine();
+            OutputWriter.Flush();
+
+            return Context.Response.Flush();
+        }
+
+        private Task PerfomSend(object state)
+        {
+            OutputWriter.Write("data: ");
+            JsonSerializer.Serialize(state, OutputWriter);
+            OutputWriter.WriteLine();
+            OutputWriter.WriteLine();
+            OutputWriter.Flush();
+
+            return Context.Response.Flush();
+        }
+
+        private Task WriteInit()
+        {
+            Context.Response.ContentType = "text/event-stream";
+
+            // "data: initialized\n\n"
+            OutputWriter.Write("data: initialized");
+            OutputWriter.WriteLine();
+            OutputWriter.WriteLine();
+            OutputWriter.Flush();
+
+            return Context.Response.Flush();
         }
     }
 }
