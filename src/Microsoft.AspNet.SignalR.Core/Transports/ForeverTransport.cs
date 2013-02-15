@@ -165,7 +165,7 @@ namespace Microsoft.AspNet.SignalR.Transports
                 JsonSerializer.Serialize(state, OutputWriter);
                 OutputWriter.Flush();
 
-                return Context.Response.End().Catch(IncrementErrorCounters);
+                return Context.Response.End().Catch(_incrementErrors);
             }, 
             value);
         }
@@ -343,7 +343,7 @@ namespace Microsoft.AspNet.SignalR.Transports
                     else
                     {
                         return Send(response).Then(() => TaskAsyncHelper.True)
-                                             .Catch(IncrementErrorCounters)
+                                             .Catch(_incrementErrors)
                                              .Catch(ex =>
                                              {
                                                  Trace.TraceEvent(TraceEventType.Error, 0, "Send failed for {0} with: {1}", ConnectionId, ex.GetBaseException());

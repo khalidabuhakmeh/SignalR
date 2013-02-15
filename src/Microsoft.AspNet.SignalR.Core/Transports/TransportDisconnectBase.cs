@@ -37,6 +37,10 @@ namespace Microsoft.AspNet.SignalR.Transports
         private CancellationToken _hostShutdownToken;
         private IDisposable _hostRegistration;
 
+        private readonly Action<AggregateException> _disconnectError;
+        private readonly Action _incrementDisconnectCounter;
+        protected readonly Action<Exception> _incrementErrors;
+
         protected TransportDisconnectBase(HostContext context, ITransportHeartbeat heartbeat, IPerformanceCounterManager performanceCounterManager, ITraceManager traceManager)
         {
             if (context == null)
@@ -67,6 +71,10 @@ namespace Microsoft.AspNet.SignalR.Transports
             WriteQueue = new TaskQueue();
 
             _trace = traceManager["SignalR.Transports." + GetType().Name];
+
+            _disconnectError = OnDisconnectError;
+            _incrementDisconnectCounter = OnDisconnectComplete;
+            _incrementErrors = IncrementErrorCounters;
         }
 
         protected TraceSource Trace
@@ -187,7 +195,7 @@ namespace Microsoft.AspNet.SignalR.Transports
             get { return _context.Request.Url; }
         }
 
-        protected void IncrementErrorCounters(Exception exception)
+        private void IncrementErrorCounters(Exception exception)
         {
             _counters.ErrorsTransportTotal.Increment();
             _counters.ErrorsTransportPerSec.Increment();
@@ -217,11 +225,8 @@ namespace Microsoft.AspNet.SignalR.Transports
                 var disconnected = Disconnected; // copy before invoking event to avoid race
                 if (disconnected != null)
                 {
-                    return disconnected().Catch(ex =>
-                    {
-                        Trace.TraceEvent(TraceEventType.Error, 0, "Failed to raise disconnect: " + ex.GetBaseException());
-                    })
-                    .Then(() => _counters.ConnectionsDisconnected.Increment());
+                    return disconnected().Catch(_disconnectError)
+                                         .Then(_incrementDisconnectCounter);
                 }
             }
 
@@ -321,6 +326,16 @@ namespace Microsoft.AspNet.SignalR.Transports
                 state.Cancel();
             },
             _connectionEndTokenSource);
+        }
+
+        private void OnDisconnectError(AggregateException ex)
+        {
+            Trace.TraceEvent(TraceEventType.Error, 0, "Failed to raise disconnect: " + ex.GetBaseException());
+        }
+
+        private void OnDisconnectComplete()
+        {
+            _counters.ConnectionsDisconnected.Increment();
         }
     }
 }

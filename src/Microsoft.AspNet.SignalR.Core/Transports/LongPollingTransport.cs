@@ -197,7 +197,7 @@ namespace Microsoft.AspNet.SignalR.Transports
 
                 OutputWriter.Flush();
                 return Context.Response.End()
-                                       .Catch(IncrementErrorCounters)
+                                       .Catch(_incrementErrors)
                                        .Catch(ex =>
                                        {
                                            Trace.TraceEvent(TraceEventType.Error, 0, "Failed EndAsync() for {0} with: {1}", ConnectionId, ex.GetBaseException());

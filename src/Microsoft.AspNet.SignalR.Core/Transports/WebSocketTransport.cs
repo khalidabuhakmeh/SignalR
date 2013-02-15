@@ -104,7 +104,7 @@ namespace Microsoft.AspNet.SignalR.Transports
 
             OnSending(data);
 
-            return _socket.Send(data).Catch(IncrementErrorCounters);
+            return _socket.Send(data).Catch(_incrementErrors);
         }
 
         public override Task Send(PersistentResponse response)
