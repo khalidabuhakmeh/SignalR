@@ -30,9 +30,18 @@ namespace Microsoft.AspNet.SignalR.Transports
 
         private HTMLTextWriter _htmlOutputWriter;
 
+        private readonly Func<Task> _keepAlive;
+        private readonly Func<object, Task> _send;
+        private readonly Func<object, Task> _writeInit;
+        private readonly Func<string, Task> _initializeResponse;
+
         public ForeverFrameTransport(HostContext context, IDependencyResolver resolver)
             : base(context, resolver)
         {
+            _keepAlive = PerformKeepAlive;
+            _send = PerformSend;
+            _writeInit = WriteInit;
+            _initializeResponse = InitializeResponse;
         }
 
         /// <summary>
@@ -67,31 +76,14 @@ namespace Microsoft.AspNet.SignalR.Transports
                 return TaskAsyncHelper.Empty;
             }
 
-            return EnqueueOperation(() =>
-            {
-                HTMLOutputWriter.WriteRaw("<script>r(c, {});</script>");
-                HTMLOutputWriter.WriteLine();
-                HTMLOutputWriter.WriteLine();
-                HTMLOutputWriter.Flush();
-
-                return Context.Response.Flush();
-            });
+            return EnqueueOperation(_keepAlive);
         }
 
         public override Task Send(PersistentResponse response)
         {
             OnSendingResponse(response);
 
-            return EnqueueOperation(state =>
-            {
-                HTMLOutputWriter.WriteRaw("<script>r(c, ");
-                JsonSerializer.Serialize(state, HTMLOutputWriter);
-                HTMLOutputWriter.WriteRaw(");</script>\r\n");
-                HTMLOutputWriter.Flush();
-
-                return Context.Response.Flush();
-            }, 
-            response);
+            return EnqueueOperation(_send, response);
         }
 
         protected internal override Task InitializeResponse(ITransportConnection connection)
@@ -104,21 +96,46 @@ namespace Microsoft.AspNet.SignalR.Transports
                 throw new InvalidOperationException(Resources.Error_InvalidForeverFrameId);
             }
 
-            return base.InitializeResponse(connection)
-                .Then(initScript =>
-                {
-                    return EnqueueOperation(state =>
-                    {
-                        Context.Response.ContentType = "text/html; charset=UTF-8";
+            string initScript = _initPrefix + 
+                                frameId.ToString(CultureInfo.InvariantCulture) + 
+                                _initSuffix;
 
-                        HTMLOutputWriter.WriteRaw((string)state);
-                        HTMLOutputWriter.Flush();
+            return base.InitializeResponse(connection).Then(_initializeResponse, initScript);
+        }
 
-                        return Context.Response.Flush();
-                    }, 
-                    initScript);
-                },
-                _initPrefix + frameId.ToString(CultureInfo.InvariantCulture) + _initSuffix);
+        private Task InitializeResponse(string initScript)
+        {
+            return EnqueueOperation(_writeInit, initScript);
+        }
+
+        private Task WriteInit(object state)
+        {
+            Context.Response.ContentType = "text/html; charset=UTF-8";
+
+            HTMLOutputWriter.WriteRaw((string)state);
+            HTMLOutputWriter.Flush();
+
+            return Context.Response.Flush();
+        }
+
+        private Task PerformSend(object state)
+        {
+            HTMLOutputWriter.WriteRaw("<script>r(c, ");
+            JsonSerializer.Serialize(state, HTMLOutputWriter);
+            HTMLOutputWriter.WriteRaw(");</script>\r\n");
+            HTMLOutputWriter.Flush();
+
+            return Context.Response.Flush();
+        }
+
+        private Task PerformKeepAlive()
+        {
+            HTMLOutputWriter.WriteRaw("<script>r(c, {});</script>");
+            HTMLOutputWriter.WriteLine();
+            HTMLOutputWriter.WriteLine();
+            HTMLOutputWriter.Flush();
+
+            return Context.Response.Flush();
         }
 
         private class HTMLTextWriter : StreamWriter
