@@ -21,6 +21,10 @@ namespace Microsoft.AspNet.SignalR.Transports
         private Disposer _requestDisposer;
         private int _requestEnded;
 
+        private readonly Func<object, Task> _send;
+        private readonly Action<AggregateException> _sendError;
+        private readonly Action<AggregateException> _postReceiveError;
+
         private const int MaxMessages = 10;
 
         protected ForeverTransport(HostContext context, IDependencyResolver resolver)
@@ -41,6 +45,10 @@ namespace Microsoft.AspNet.SignalR.Transports
         {
             _jsonSerializer = jsonSerializer;
             _counters = performanceCounterWriter;
+
+            _send = PerformSend;
+            _sendError = OnSendError;
+            _postReceiveError = OnPostReceiveError;
         }
 
         protected string LastMessageId
@@ -158,16 +166,7 @@ namespace Microsoft.AspNet.SignalR.Transports
 
         public virtual Task Send(object value)
         {
-            return EnqueueOperation(state =>
-            {
-                Context.Response.ContentType = JsonUtility.JsonMimeType;
-
-                JsonSerializer.Serialize(state, OutputWriter);
-                OutputWriter.Flush();
-
-                return Context.Response.End().Catch(_incrementErrors);
-            }, 
-            value);
+            return EnqueueOperation(_send, value);
         }
 
         protected internal virtual Task InitializeResponse(ITransportConnection connection)
@@ -343,11 +342,7 @@ namespace Microsoft.AspNet.SignalR.Transports
                     else
                     {
                         return Send(response).Then(() => TaskAsyncHelper.True)
-                                             .Catch(_incrementErrors)
-                                             .Catch(ex =>
-                                             {
-                                                 Trace.TraceEvent(TraceEventType.Error, 0, "Send failed for {0} with: {1}", ConnectionId, ex.GetBaseException());
-                                             });
+                                             .Catch(_sendError);
                     }
                 },
                 MaxMessages);
@@ -369,10 +364,7 @@ namespace Microsoft.AspNet.SignalR.Transports
 
             postReceive().Catch(_counters.ErrorsAllTotal, _counters.ErrorsAllPerSec)
                          .Catch(ex => endRequest(ex))
-                         .Catch(ex =>
-                         {
-                             Trace.TraceEvent(TraceEventType.Error, 0, "Failed post receive for {0} with: {1}", ConnectionId, ex.GetBaseException());
-                         })
+                         .Catch(_postReceiveError)
                          .ContinueWith(InitializeTcs);
 
             if (BeforeCancellationTokenCallbackRegistered != null)
@@ -390,6 +382,28 @@ namespace Microsoft.AspNet.SignalR.Transports
             subscription);
 
             disposer.Set(registration);
+        }
+
+        private Task PerformSend(object state)
+        {
+            Context.Response.ContentType = JsonUtility.JsonMimeType;
+
+            JsonSerializer.Serialize(state, OutputWriter);
+            OutputWriter.Flush();
+
+            return Context.Response.End().Catch(_incrementErrors);
+        }
+
+        private void OnSendError(AggregateException ex)
+        {
+            _incrementErrors(ex);
+
+            Trace.TraceEvent(TraceEventType.Error, 0, "Send failed for {0} with: {1}", ConnectionId, ex.GetBaseException());
+        }
+
+        private void OnPostReceiveError(AggregateException ex)
+        {
+            Trace.TraceEvent(TraceEventType.Error, 0, "Failed post receive for {0} with: {1}", ConnectionId, ex.GetBaseException());
         }
     }
 }
