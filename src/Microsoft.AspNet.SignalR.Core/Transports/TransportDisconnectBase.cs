@@ -39,7 +39,7 @@ namespace Microsoft.AspNet.SignalR.Transports
 
         private readonly Action<AggregateException> _disconnectError;
         private readonly Action _incrementDisconnectCounter;
-        protected readonly Action<AggregateException> _incrementErrors;
+        private readonly Action<AggregateException> _incrementErrors;
 
         protected TransportDisconnectBase(HostContext context, ITransportHeartbeat heartbeat, IPerformanceCounterManager performanceCounterManager, ITraceManager traceManager)
         {
@@ -195,7 +195,15 @@ namespace Microsoft.AspNet.SignalR.Transports
             get { return _context.Request.Url; }
         }
 
-        private void IncrementErrorCounters(Exception exception)
+        protected Action<AggregateException> IncrementErrors
+        {
+            get
+            {
+                return _incrementErrors;
+            }
+        }
+
+        private void IncrementErrorCounters(AggregateException exception)
         {
             _counters.ErrorsTransportTotal.Increment();
             _counters.ErrorsTransportPerSec.Increment();

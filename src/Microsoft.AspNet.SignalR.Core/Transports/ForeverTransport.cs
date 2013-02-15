@@ -398,12 +398,12 @@ namespace Microsoft.AspNet.SignalR.Transports
             JsonSerializer.Serialize(state, OutputWriter);
             OutputWriter.Flush();
 
-            return Context.Response.End().Catch(_incrementErrors);
+            return Context.Response.End().Catch(IncrementErrors);
         }
 
         private void OnSendError(AggregateException ex)
         {
-            _incrementErrors(ex);
+            IncrementErrors(ex);
 
             Trace.TraceEvent(TraceEventType.Error, 0, "Send failed for {0} with: {1}", ConnectionId, ex.GetBaseException());
         }
