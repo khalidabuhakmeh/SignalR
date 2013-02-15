@@ -218,22 +218,27 @@ namespace Microsoft.AspNet.SignalR.Transports
         {
             Func<Task> afterReceive = () =>
             {
-                return TaskAsyncHelper.Series(OnTransportConnected,
-                                              () => InitializeResponse(connection),
-                                              () =>
-                                              {
-                                                  if (postReceive != null)
-                                                  {
-                                                      return postReceive();
-                                                  }
-                                                  return TaskAsyncHelper.Empty;
-                                              });
+                var series = new Func<object, Task>[] 
+                { 
+                    OnTransportConnected,
+                    state => InitializeResponse((ITransportConnection)state),
+                    state =>
+                    {
+                        if (state != null)
+                        {
+                            return ((Func<Task>)state).Invoke();
+                        }
+                        return TaskAsyncHelper.Empty;
+                    }
+                };
+
+                return TaskAsyncHelper.Series(series, new object[] { null, connection, postReceive });
             };
 
             return ProcessMessages(connection, afterReceive);
         }
 
-        private Task OnTransportConnected()
+        private Task OnTransportConnected(object state)
         {
             if (TransportConnected != null)
             {
@@ -245,7 +250,7 @@ namespace Microsoft.AspNet.SignalR.Transports
 
         private Task ProcessMessages(ITransportConnection connection, Func<Task> postReceive)
         {
-            var tcs = new TaskCompletionSource<object>();
+            var processMessagesTcs = new TaskCompletionSource<object>();
 
             Action<Exception> endRequest = (ex) =>
             {
@@ -259,8 +264,10 @@ namespace Microsoft.AspNet.SignalR.Transports
 
                 // Drain the task queue for pending write operations so we don't end the request and then try to write
                 // to a corrupted request object.
-                WriteQueue.Drain().Catch().ContinueWith(task =>
+                WriteQueue.Drain().Catch().Finally(state =>
                 {
+                    var tcs = (TaskCompletionSource<object>)state;
+
                     if (ex != null)
                     {
                         tcs.TrySetUnwrappedException(ex);
@@ -274,7 +281,7 @@ namespace Microsoft.AspNet.SignalR.Transports
 
                     Trace.TraceInformation("EndRequest(" + ConnectionId + ")");
                 },
-                TaskContinuationOptions.ExecuteSynchronously);
+                processMessagesTcs);
 
                 if (AfterRequestEnd != null)
                 {
@@ -286,7 +293,7 @@ namespace Microsoft.AspNet.SignalR.Transports
 
             _requestDisposer.Set(() => endRequest(null));
 
-            return tcs.Task;
+            return processMessagesTcs.Task;
         }
 
         [SuppressMessage("Microsoft.Maintainability", "CA1502:AvoidExcessiveComplexity", Justification = "This will be cleaned up later.")]
