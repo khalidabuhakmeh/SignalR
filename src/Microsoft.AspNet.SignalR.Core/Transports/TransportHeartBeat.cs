@@ -30,6 +30,9 @@ namespace Microsoft.AspNet.SignalR.Transports
         private int _running;
         private ulong _heartbeatCount;
 
+        private readonly Action<AggregateException> _keepAliveError;
+        private readonly Action<ConnectionMetadata> _connectionEnded;
+
         /// <summary>
         /// Initializes and instance of the <see cref="TransportHeartbeat"/> class.
         /// </summary>
@@ -45,6 +48,9 @@ namespace Microsoft.AspNet.SignalR.Transports
             _trace = traceManager["SignalR.Transports.TransportHeartBeat"];
 
             _serverCommandHandler.Command = ProcessServerCommand;
+
+            _keepAliveError = OnKeepAliveError;
+            _connectionEnded = OnConnectionEnded;
 
             // REVIEW: When to dispose the timer?
             _timer = new Timer(Beat,
@@ -89,26 +95,21 @@ namespace Microsoft.AspNet.SignalR.Transports
             }
 
             var newMetadata = new ConnectionMetadata(connection);
-            ConnectionMetadata oldMetadata = null;
             bool isNewConnection = true;
 
             _connections.AddOrUpdate(connection.ConnectionId, newMetadata, (key, old) =>
             {
-                oldMetadata = old;
+                Trace.TraceInformation("Connection {0} exists. Closing previous connection.", old.Connection.ConnectionId);
+                // Kick out the older connection. This should only happen when 
+                // a previous connection attempt fails on the client side (e.g. transport fallback).
+                EndConnection(old);
+                // If we have old metadata this isn't a new connection
+                isNewConnection = false;
+
                 return newMetadata;
             });
 
-            if (oldMetadata != null)
-            {
-                Trace.TraceInformation("Connection {0} exists. Closing previous connection.", oldMetadata.Connection.ConnectionId);
-
-                // Kick out the older connection. This should only happen when 
-                // a previous connection attempt fails on the client side (e.g. transport fallback).
-                EndConnection(oldMetadata);
-                // If we have old metadata this isn't a new connection
-                isNewConnection = false;
-            }
-            else
+            if (isNewConnection)
             {
                 Trace.TraceInformation("Connection {0} is New.", connection.ConnectionId);
             }
@@ -122,7 +123,7 @@ namespace Microsoft.AspNet.SignalR.Transports
             newMetadata.Initial = DateTime.UtcNow;
 
             // Register for disconnect cancellation
-            newMetadata.Registration = connection.CancellationToken.SafeRegister(OnConnectionEnded, newMetadata);
+            newMetadata.Registration = connection.CancellationToken.SafeRegister(_connectionEnded, newMetadata);
 
             return isNewConnection;
         }
@@ -259,11 +260,7 @@ namespace Microsoft.AspNet.SignalR.Transports
                 {
                     Trace.TraceEvent(TraceEventType.Verbose, 0, "KeepAlive(" + metadata.Connection.ConnectionId + ")");
 
-                    metadata.Connection.KeepAlive()
-                                       .Catch(ex =>
-                                       {
-                                           Trace.TraceEvent(TraceEventType.Error, 0, "Failed to send keep alive: " + ex.GetBaseException());
-                                       });
+                    metadata.Connection.KeepAlive().Catch(_keepAliveError);
                 }
 
                 MarkConnection(metadata.Connection);
@@ -377,6 +374,11 @@ namespace Microsoft.AspNet.SignalR.Transports
             {
                 metadata.Registration.Dispose();
             }
+        }
+
+        private void OnKeepAliveError(AggregateException ex)
+        {
+            Trace.TraceEvent(TraceEventType.Error, 0, "Failed to send keep alive: " + ex.GetBaseException());
         }
 
         private class ConnectionMetadata
