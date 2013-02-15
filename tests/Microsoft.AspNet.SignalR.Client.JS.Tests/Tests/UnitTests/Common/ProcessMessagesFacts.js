@@ -1,7 +1,7 @@
 ﻿QUnit.module("Transports Common - Process Messages Facts");
 
 QUnit.test("Noop's on missing transport", function () {
-    var connection = testUtilities.createHubConnection(),
+    var connection = testUtilities.createConnection(),
         lastKeepAlive = false;
 
     // Ensure the connection can utilize the keep alive features
@@ -15,7 +15,7 @@ QUnit.test("Noop's on missing transport", function () {
 });
 
 QUnit.test("Updates keep alive data on any message retrieval.", function () {
-    var connection = testUtilities.createHubConnection(),
+    var connection = testUtilities.createConnection(),
         response = {
             C: 1234,
             M: [{ uno: 1, dos: 2 }, { tres: 3, quatro: 4 }],
@@ -44,7 +44,7 @@ QUnit.test("Updates keep alive data on any message retrieval.", function () {
 });
 
 QUnit.test("Noop's on keep alive", function () {
-    var connection = testUtilities.createHubConnection(),
+    var connection = testUtilities.createConnection(),
         savedMaximizePersistentResponse = $.signalR.transports._logic.maximizePersistentResponse,
         failed = false;
 
@@ -65,7 +65,7 @@ QUnit.test("Noop's on keep alive", function () {
 });
 
 QUnit.test("Handles disconnect command correctly", function () {
-    var connection = testUtilities.createHubConnection(),
+    var connection = testUtilities.createConnection(),
         response = {
             C: 1234,
             M: [{ uno: 1, dos: 2 }, { tres: 3, quatro: 4 }],
@@ -85,7 +85,7 @@ QUnit.test("Handles disconnect command correctly", function () {
 });
 
 QUnit.test("Updates group on message retrieval.", function () {
-    var connection = testUtilities.createHubConnection(),
+    var connection = testUtilities.createConnection(),
         response = {
             C: 1234,
             M: [{ uno: 1, dos: 2 }, { tres: 3, quatro: 4 }],
@@ -138,7 +138,7 @@ QUnit.test("Triggeres received handler for each message.", function () {
 });
 
 QUnit.test("Message ID is set on connection ID when set.", function () {
-    var connection = testUtilities.createHubConnection(),
+    var connection = testUtilities.createConnection(),
         response = {
             M: false,
             L: 1337,

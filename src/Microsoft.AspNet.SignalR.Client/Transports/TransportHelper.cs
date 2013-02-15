@@ -92,7 +92,6 @@ namespace Microsoft.AspNet.SignalR.Client.Transports
 
         [SuppressMessage("Microsoft.Design", "CA1062:Validate arguments of public methods", MessageId = "0", Justification = "This is called internally.")]
         [SuppressMessage("Microsoft.Design", "CA1021:AvoidOutParameters", Justification = "This is called internally.")]
-        [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "The client receives the exception in the OnError callback.")]
         public static void ProcessResponse(IConnection connection, string response, out bool timedOut, out bool disconnected)
         {
             if (connection == null)
@@ -108,63 +107,38 @@ namespace Microsoft.AspNet.SignalR.Client.Transports
                 return;
             }
 
-            try
+            var result = JValue.Parse(response);
+
+            if (!result.HasValues)
             {
-                var result = JValue.Parse(response);
-
-                if (!result.HasValues)
-                {
-                    return;
-                }
-
-                if (result["I"] != null)
-                {
-                    connection.OnReceived(result);
-                    return;
-                }
-
-                timedOut = result.Value<int>("T") == 1;
-                disconnected = result.Value<int>("D") == 1;
-
-                if (disconnected)
-                {
-                    return;
-                }
-
-                UpdateGroups(connection, groupsToken: result["G"]);
-
-                var messages = result["M"] as JArray;
-                if (messages != null)
-                {
-                    foreach (JToken message in messages)
-                    {
-                        try
-                        {
-                            connection.OnReceived(message);
-                        }
-                        catch (Exception ex)
-                        {
-#if NET35
-                            Debug.WriteLine(String.Format(CultureInfo.InvariantCulture, "Failed to process message: {0}", ex));
-#else
-                            Debug.WriteLine("Failed to process message: {0}", ex);
-#endif
-
-                            connection.OnError(ex);
-                        }
-                    }
-
-                    connection.MessageId = result["C"].Value<string>();
-                }
+                return;
             }
-            catch (Exception ex)
+
+            if (result["I"] != null)
             {
-#if NET35
-                Debug.WriteLine(String.Format(CultureInfo.InvariantCulture, "Failed to response: {0}", ex));
-#else
-                Debug.WriteLine("Failed to response: {0}", ex);
-#endif
-                connection.OnError(ex);
+                connection.OnReceived(result);
+                return;
+            }
+
+            timedOut = result.Value<int>("T") == 1;
+            disconnected = result.Value<int>("D") == 1;
+
+            if (disconnected)
+            {
+                return;
+            }
+
+            UpdateGroups(connection, groupsToken: result["G"]);
+
+            var messages = result["M"] as JArray;
+            if (messages != null)
+            {
+                foreach (JToken message in messages)
+                {
+                    connection.OnReceived(message);
+                }
+
+                connection.MessageId = result["C"].Value<string>();
             }
         }
 
