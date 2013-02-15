@@ -143,12 +143,12 @@ namespace Microsoft.AspNet.SignalR.Infrastructure
             return _bus.Receive<PersistentResponse>(this, messageId, cancel, maxMessages, GetResponse);
         }
 
-        public IDisposable Receive(string messageId, Func<PersistentResponse, Task<bool>> callback, int maxMessages)
+        public IDisposable Receive(string messageId, Func<PersistentResponse, object, Task<bool>> callback, int maxMessages, object state)
         {
             return _bus.Subscribe(this, messageId, result =>
             {
                 PersistentResponse response = GetResponse(result);
-                return callback(response);
+                return callback(response, state);
             },
             maxMessages);
         }

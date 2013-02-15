@@ -101,7 +101,7 @@ namespace Microsoft.AspNet.SignalR
             for (int i = 0; i < tasks.Length; i++)
             {
                 prev = finalTask;
-                finalTask = prev.Then(tasks[i], state[i]);                
+                finalTask = prev.Then(tasks[i], state[i]);
             }
 
             return finalTask;
@@ -140,8 +140,9 @@ namespace Microsoft.AspNet.SignalR
                 });
         }
 #endif
+
         [SuppressMessage("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode", Justification = "This is a shared file")]
-        public static TTask Catch<TTask>(this TTask task, Action<AggregateException> handler) where TTask : Task
+        public static TTask Catch<TTask>(this TTask task, Action<AggregateException, object> handler, object state) where TTask : Task
         {
             if (task != null && task.Status != TaskStatus.RanToCompletion)
             {
@@ -152,10 +153,17 @@ namespace Microsoft.AspNet.SignalR
 #if !WINDOWS_PHONE && !SILVERLIGHT && !NETFX_CORE
                     Trace.TraceError("SignalR exception thrown by Task: {0}", ex);
 #endif
-                    handler(ex);
+                    handler(ex, state);
                 }, TaskContinuationOptions.OnlyOnFaulted);
             }
             return task;
+        }
+
+        [SuppressMessage("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode", Justification = "This is a shared file")]
+        public static TTask Catch<TTask>(this TTask task, Action<AggregateException> handler) where TTask : Task
+        {
+            return task.Catch((ex, state) => ((Action<AggregateException>)state).Invoke(ex),
+                              handler);
         }
 
         [SuppressMessage("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode", Justification = "This is a shared file")]
@@ -192,7 +200,8 @@ namespace Microsoft.AspNet.SignalR
                 {
                     tcs.TrySetResult(null);
                 }
-            });
+            },
+            TaskContinuationOptions.ExecuteSynchronously);
         }
 
         [SuppressMessage("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode", Justification = "This is a shared file")]
